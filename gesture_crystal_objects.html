@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gesture Glitter Conjuring</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#12161f; --line:#232a38;
+    --ink:#eef1f6; --dim:#8a93a6; --cyan:#5eead4; --coral:#ff6b6b; --gold:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0;padding:0;height:100%; background:var(--bg); color:var(--ink);
+    font-family: ui-rounded,"SF Pro Rounded",-apple-system,"Segoe UI",system-ui,sans-serif; overflow:hidden; }
+  #stage{ position:relative; width:100%; height:100vh; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(circle at 20% 10%, rgba(94,234,212,0.08), transparent 40%),
+                radial-gradient(circle at 85% 90%, rgba(255,107,107,0.08), transparent 45%), var(--bg); }
+  #videoWrap{ position:relative; width:min(92vw,900px); aspect-ratio:4/3; border-radius:18px; overflow:hidden;
+    box-shadow:0 0 0 1px var(--line), 0 30px 60px -20px rgba(0,0,0,0.6); background:#000; }
+  video{ display:none; }
+  canvas{ width:100%; height:100%; display:block; }
+  .topbar{ position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start;
+    padding:14px 16px; pointer-events:none; z-index:5; }
+  .brand{ font-weight:800; letter-spacing:0.5px; font-size:15px; color:var(--ink); text-shadow:0 2px 12px rgba(0,0,0,0.6); }
+  .brand span{ color:var(--cyan); }
+  .badge{ pointer-events:auto; background:rgba(11,14,20,0.72); border:1px solid var(--line); backdrop-filter:blur(6px);
+    padding:8px 12px; border-radius:999px; font-size:12px; color:var(--dim); }
+  .legend{ position:absolute; left:14px; bottom:14px; background:rgba(11,14,20,0.72); border:1px solid var(--line);
+    backdrop-filter:blur(6px); border-radius:14px; padding:12px 14px; font-size:12px; color:var(--dim);
+    max-width:250px; line-height:1.75; z-index:5; }
+  .legend b{ color:var(--ink); font-weight:700; }
+  .legend .row{ display:flex; gap:8px; align-items:center; }
+  #startOverlay{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; background:linear-gradient(180deg, rgba(11,14,20,0.4), rgba(11,14,20,0.85)); z-index:10; text-align:center; padding:24px; }
+  #startOverlay h1{ font-size:22px; margin:0; font-weight:800; }
+  #startOverlay p{ margin:0; color:var(--dim); font-size:13px; max-width:380px; line-height:1.6; }
+  #startBtn{ padding:12px 26px; border-radius:999px; border:none; background:var(--cyan); color:#04211d;
+    font-weight:800; font-size:14px; cursor:pointer; box-shadow:0 10px 30px -10px rgba(94,234,212,0.5); }
+  #startBtn:hover{ filter:brightness(1.05); }
+  #recBtn{ position:absolute; right:16px; bottom:16px; z-index:6; width:58px; height:58px; border-radius:50%;
+    border:3px solid #fff; background:rgba(255,255,255,0.15); backdrop-filter:blur(4px); cursor:pointer;
+    display:none; align-items:center; justify-content:center; }
+  #recBtn .dot{ width:26px; height:26px; border-radius:50%; background:var(--coral); transition:all 0.15s; }
+  #recBtn.recording .dot{ border-radius:6px; width:20px; height:20px; }
+  #recIndicator{ position:absolute; left:16px; top:16px; z-index:6; display:none; align-items:center; gap:6px;
+    background:rgba(0,0,0,0.5); padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; }
+  #recIndicator .pulse{ width:9px; height:9px; border-radius:50%; background:var(--coral); animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  #downloadBar{ position:absolute; left:0; right:0; bottom:0; z-index:8; display:none; flex-direction:column; gap:8px;
+    align-items:center; padding:16px; background:linear-gradient(0deg, rgba(11,14,20,0.95), rgba(11,14,20,0.7)); }
+  #downloadBar a{ padding:10px 20px; border-radius:999px; background:var(--cyan); color:#04211d; font-weight:800;
+    font-size:14px; text-decoration:none; }
+  #downloadBar button{ background:none; border:none; color:var(--dim); font-size:12px; cursor:pointer; }
+  #errBox{ display:none; position:absolute; inset:0; z-index:15; background:rgba(11,14,20,0.95);
+    align-items:center; justify-content:center; flex-direction:column; gap:10px; text-align:center; padding:24px; }
+  #errBox b{ color:var(--coral); }
+  #errBox p{ color:var(--dim); font-size:13px; max-width:380px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="videoWrap">
+    <video id="video" playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="topbar">
+      <div></div>
+      <div class="badge" id="loadBadge">loading mediapipe…</div>
+    </div>
+
+    <div id="recIndicator"><span class="pulse"></span><span id="recTimer">0:00</span></div>
+    <button id="recBtn" title="Record"><span class="dot"></span></button>
+    <div id="downloadBar">
+      <a id="downloadLink" href="#" download="glitter.webm">Download recording</a>
+      <button id="dismissDownload">Dismiss</button>
+    </div>
+
+    <div id="startOverlay">
+      <h1>Make glitter pour from your hand ✨</h1>
+      <p>This runs locally in your browser — nothing is uploaded. Show your hand and hold a gesture — tiny sparkling shards stream out and fall.</p>
+      <button id="startBtn">Start camera</button>
+    </div>
+
+    <div id="errBox">
+      <b>MediaPipe didn't load</b>
+      <p id="errMsg">The hand tracking library couldn't be loaded in this environment. Let me know and I'll switch this to a version that doesn't need external models.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+(function(){
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const loadBadge = document.getElementById('loadBadge');
+  const errBox = document.getElementById('errBox');
+  const errMsg = document.getElementById('errMsg');
+
+  let libsReady = false;
+  function checkLibs(){
+    if (window.Hands && window.Camera){
+      libsReady = true;
+      loadBadge.textContent = 'ready';
+      loadBadge.style.color = '#5eead4';
+    }
+  }
+  checkLibs();
+  let attempts = 0;
+  const libCheck = setInterval(()=>{
+    attempts++;
+    checkLibs();
+    if (libsReady){ clearInterval(libCheck); }
+    else if (attempts > 40){
+      clearInterval(libCheck);
+      showError("Timed out waiting for MediaPipe scripts to load (jsdelivr may be blocked here).");
+    }
+  }, 200);
+
+  function showError(msg){
+    if (msg) errMsg.textContent = msg;
+    errBox.style.display = 'flex';
+    startOverlay.style.display = 'none';
+  }
+
+  let W = 960, H = 720;
+  function resizeCanvas(){
+    const wrap = document.getElementById('videoWrap');
+    W = wrap.clientWidth; H = wrap.clientHeight;
+    canvas.width = W; canvas.height = H;
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  let latestHands = null;
+
+  // ---------- gesture classification ----------
+  const HUE_MAP = { star:195, gem:275, rose:340, wand:48 };
+
+  function classifyGesture(lm){
+    const extended = (tip, pip) => lm[tip].y < lm[pip].y - 0.02;
+    const idx = extended(8,6);
+    const mid = extended(12,10);
+    const ring = extended(16,14);
+    const pinky = extended(20,18);
+    const extCount = [idx,mid,ring,pinky].filter(Boolean).length;
+    const thumbUp = (lm[4].y < lm[3].y - 0.03) && (lm[4].y < lm[0].y - 0.05);
+
+    if (extCount >= 4) return 'star';
+    if (extCount === 0 && thumbUp) return 'wand';
+    if (extCount === 0 && !thumbUp) return 'gem';
+    if (idx && mid && !ring && !pinky) return 'rose';
+    return 'none';
+  }
+
+  // ---------- per-hand smoothing / debounce state ----------
+  let handStates = [];
+  const STREAK_NEEDED = 6;
+  const SWITCH_COOLDOWN = 350;
+
+  function getOrCreateState(rawX, rawY, rawSize){
+    let best = null, bestDist = Infinity;
+    for (const s of handStates){
+      const d = Math.hypot(s.sx-rawX, s.sy-rawY);
+      if (d < bestDist){ bestDist = d; best = s; }
+    }
+    if (best && bestDist < rawSize*1.8) return best;
+    const fresh = { sx:rawX, sy:rawY, ssize:rawSize, current:'none', candidate:'none', streak:0, lastSwitch:0 };
+    handStates.push(fresh);
+    return fresh;
+  }
+
+  // ---------- glitter particle system ----------
+  let particles = [];
+  let lastFrameTime = performance.now();
+
+  function spawnParticles(handLm){
+    const tipIdxs = [4,8,12,16,20];
+    const n = 9 + Math.floor(Math.random()*5); // 9-13 per hand per frame — dense pour
+    for (let i=0;i<n;i++){
+      const ti = tipIdxs[Math.floor(Math.random()*tipIdxs.length)];
+      const jitter = 10;
+      const ox = handLm[ti].x*W + (Math.random()-0.5)*jitter;
+      const oy = handLm[ti].y*H + (Math.random()-0.5)*jitter;
+      particles.push({
+        x: ox, y: oy,
+        vx: (Math.random()-0.5)*0.05,
+        vy: 0.02 + Math.random()*0.05,
+        size: 3 + Math.random()*5,
+        rot: Math.random()*Math.PI*2,
+        vrot: (Math.random()-0.5)*0.004,
+        hue: 212 + (Math.random()-0.5)*10, // cool silver tint, tight range
+        born: performance.now(),
+        life: 1100 + Math.random()*1000,
+        seed: Math.random()*1000
+      });
+    }
+  }
+
+  function updateParticles(dt, t){
+    for (const p of particles){
+      p.vy += 0.0006*dt; // gravity
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+      p.rot += p.vrot*dt;
+    }
+    particles = particles.filter(p => (t-p.born) < p.life && p.y < H+40 && particles.length < 1200);
+    if (particles.length > 1200) particles.splice(0, particles.length-1200);
+  }
+
+  function drawParticles(c, t){
+    c.save();
+    c.globalCompositeOperation = 'screen';
+    for (const p of particles){
+      const age = (t-p.born)/p.life;
+      let alpha = 1;
+      if (age < 0.12) alpha = age/0.12;
+      else if (age > 0.75) alpha = 1-(age-0.75)/0.25;
+      alpha = Math.max(0, Math.min(1, alpha));
+      const twinkle = 0.55 + 0.45*Math.sin(t*0.02 + p.seed);
+      const s = p.size * (1 - age*0.25);
+
+      c.save();
+      c.translate(p.x, p.y);
+      c.rotate(p.rot);
+
+      // tiny diamond shard, two-tone shaded
+      c.beginPath();
+      c.moveTo(0,-s); c.lineTo(s*0.62,0); c.lineTo(0,s); c.closePath();
+      c.fillStyle = `hsla(${p.hue},18%,88%,${alpha*0.95*twinkle})`;
+      c.fill();
+
+      c.beginPath();
+      c.moveTo(0,-s); c.lineTo(-s*0.62,0); c.lineTo(0,s); c.closePath();
+      c.fillStyle = `hsla(${p.hue},14%,50%,${alpha*0.85})`;
+      c.fill();
+
+      c.fillStyle = `rgba(255,255,255,${alpha*twinkle})`;
+      c.beginPath();
+      c.arc(0, -s*0.1, Math.max(0.6, s*0.24), 0, Math.PI*2);
+      c.fill();
+
+      c.restore();
+    }
+    c.restore();
+  }
+
+  function render(){
+    const t = performance.now();
+    const dt = Math.min(50, t - lastFrameTime);
+    lastFrameTime = t;
+
+    ctx.save();
+    ctx.translate(W,0); ctx.scale(-1,1);
+    if (video.readyState >= 2){
+      ctx.drawImage(video, 0, 0, W, H);
+    }
+
+    const handsArr = (latestHands && latestHands.multiHandLandmarks) ? latestHands.multiHandLandmarks : [];
+    const usedStates = [];
+
+    for (const lm of handsArr){
+      const palmPts = [0,5,9,13,17].map(i => ({x: lm[i].x*W, y: lm[i].y*H}));
+      const rawX = palmPts.reduce((s,p)=>s+p.x,0)/palmPts.length;
+      const rawY = palmPts.reduce((s,p)=>s+p.y,0)/palmPts.length;
+      const rawSize = Math.max(40, Math.hypot((lm[0].x-lm[12].x)*W, (lm[0].y-lm[12].y)*H) * 0.9);
+
+      const state = getOrCreateState(rawX, rawY, rawSize);
+      usedStates.push(state);
+      const a = 0.25;
+      state.sx += (rawX - state.sx) * a;
+      state.sy += (rawY - state.sy) * a;
+      state.ssize += (rawSize - state.ssize) * a;
+
+      const gesture = classifyGesture(lm);
+      if (gesture === state.candidate){ state.streak++; }
+      else { state.candidate = gesture; state.streak = 1; }
+      if (state.streak >= STREAK_NEEDED && (t - state.lastSwitch) > SWITCH_COOLDOWN && state.candidate !== state.current){
+        state.current = state.candidate;
+        state.lastSwitch = t;
+      }
+
+      if (state.current !== 'none'){
+        spawnParticles(lm);
+      }
+    }
+
+    handStates = usedStates;
+
+    updateParticles(dt, t);
+    drawParticles(ctx, t);
+
+    ctx.restore();
+    requestAnimationFrame(render);
+  }
+
+  let camera = null;
+
+  // ---------- recording ----------
+  const recBtn = document.getElementById('recBtn');
+  const recIndicator = document.getElementById('recIndicator');
+  const recTimer = document.getElementById('recTimer');
+  const downloadBar = document.getElementById('downloadBar');
+  const downloadLink = document.getElementById('downloadLink');
+  const dismissDownload = document.getElementById('dismissDownload');
+
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordStartTime = 0;
+  let recordTimerInterval = null;
+
+  function pickMimeType(){
+    const candidates = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    for (const c of candidates){
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+  }
+
+  function formatTime(ms){
+    const s = Math.floor(ms/1000);
+    const mm = Math.floor(s/60), ss = s%60;
+    return `${mm}:${ss.toString().padStart(2,'0')}`;
+  }
+
+  function startRecording(){
+    if (!canvas.captureStream){
+      alert("Recording isn't supported in this browser.");
+      return;
+    }
+    const stream = canvas.captureStream(30);
+    const mimeType = pickMimeType();
+    try{
+      mediaRecorder = mimeType ? new MediaRecorder(stream, {mimeType}) : new MediaRecorder(stream);
+    } catch(e){
+      alert("Couldn't start recording: " + e.message);
+      return;
+    }
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || 'video/webm'});
+      const url = URL.createObjectURL(blob);
+      const ext = (mediaRecorder.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
+      downloadLink.href = url;
+      downloadLink.download = `glitter-${Date.now()}.${ext}`;
+      downloadBar.style.display = 'flex';
+    };
+    mediaRecorder.start();
+
+    recordStartTime = performance.now();
+    recIndicator.style.display = 'flex';
+    recBtn.classList.add('recording');
+    recordTimerInterval = setInterval(()=>{
+      recTimer.textContent = formatTime(performance.now() - recordStartTime);
+    }, 250);
+  }
+
+  function stopRecording(){
+    if (mediaRecorder && mediaRecorder.state !== 'inactive'){
+      mediaRecorder.stop();
+    }
+    recBtn.classList.remove('recording');
+    recIndicator.style.display = 'none';
+    if (recordTimerInterval){ clearInterval(recordTimerInterval); recordTimerInterval = null; }
+  }
+
+  recBtn.addEventListener('click', () => {
+    if (recBtn.classList.contains('recording')) stopRecording();
+    else startRecording();
+  });
+
+  dismissDownload.addEventListener('click', () => {
+    downloadBar.style.display = 'none';
+  });
+
+  startBtn.addEventListener('click', async ()=>{
+    if (!libsReady){ showError(); return; }
+    try{
+      startOverlay.style.display = 'none';
+
+      const hands = new Hands({ locateFile: (f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+      hands.setOptions({ maxNumHands:2, modelComplexity:1, minDetectionConfidence:0.6, minTrackingConfidence:0.5 });
+      hands.onResults((res)=>{ latestHands = res; });
+
+      resizeCanvas();
+
+      camera = new Camera(video, {
+        onFrame: async () => { await hands.send({image: video}); },
+        width: 960, height: 720
+      });
+
+      await camera.start();
+      lastFrameTime = performance.now();
+      requestAnimationFrame(render);
+      recBtn.style.display = 'flex';
+    } catch(err){
+      showError('Camera or model failed to start: ' + (err && err.message ? err.message : err));
+    }
+  });
+})();
+</script>
+</body>
+</html>
